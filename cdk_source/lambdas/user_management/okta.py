@@ -48,6 +48,33 @@ def get_connect_user(userid):
         raise error
 
 
+# PRNX - This function was added by pronetx
+
+def get_connect_user_username(username):
+    """To get Connect user info."""
+    user_found = {}
+    try:
+        LOGGER.info("Looking for %s in Connect instance %s for user creation...", username, INSTANCE_ID)    # noqa: E501
+        paginator = CONNECT_CLIENT.get_paginator('list_users')
+        paginated_user_list = paginator.paginate(
+            InstanceId=INSTANCE_ID,
+            PaginationConfig={
+            }
+        )
+        for page in paginated_user_list:
+            for users in page['UserSummaryList']:
+                if username == users['Username']:
+                    user_found = {
+                        "Username": users['Username'],
+                        "Id": users['Id']
+                    }
+                    LOGGER.info("User %s id: ['%s'] in Connect instance %s...", user_found['Id'], user_found['Id'], INSTANCE_ID)    # noqa: E501
+        return user_found
+    except botocore.exceptions.ClientError as error:
+        LOGGER.error("Connect User Management Failure - Boto3 client error in UserManagementScimLambda while getting Connect user due to %s", error.response['Error']['Code'])     # noqa: E501
+        raise error
+
+
 # The fuction to Create connect user based on SCIM payload
 
 def create_connect_user(body):
@@ -83,6 +110,14 @@ def create_connect_user(body):
         )
         user_info['id'] = output['UserId']
         return user_info
+    # PRNX - The below exception was added by pronetx
+    except CONNECT_CLIENT.exceptions.DuplicateResourceException as error:
+        user = get_connect_user_username(user_name)
+        if user:
+            user_info['id'] = user['Id']
+            return user_info
+        raise error
+
     except botocore.exceptions.ClientError as error:
         LOGGER.error("Connect User Management Failure - Boto3 client error in UserManagementScimLambda while creating Connect user due to %s", error.response['Error']['Code'])     # noqa: E501
         raise error
